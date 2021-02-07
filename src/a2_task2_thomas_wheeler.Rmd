@@ -12,11 +12,16 @@ knitr::opts_chunk$set(echo = TRUE)
 
 library(tidyverse)
 library(here)
+library(GGally)
+library(broom)
+library(kableExtra)
+library(janitor)
+library(scales)
 ```
 
 ### Overview
 
-This document explores differences between two species of *Serenoa* using the variables height, weight, length, number of green leaves. The first section, "Preliminary Data Exploration", presents 3 scatterplot visualizations of plant characteristics and how they compare within and between the two species. The second section generates a binomial logistic regression model using plant height, canopy length, canopy width and green leaves as predictor variables to predict differences between these two species. The final section evaluates the success of this model, displaying discrepancies between when the model was correct and incorrect for both species.
+This document explores differences between two species of *Serenoa* using the variables height, weight, length, number of green leaves. The first section, "Preliminary Data Exploration", presents 3  visualizations (scatterplot, boxplot, jitterplot) of plant characteristics and how they compare within and between the two species. The second section generates a binomial logistic regression model using plant height, canopy length, canopy width and green leaves as predictor variables to predict differences between these two species. The final section evaluates the success of this model, displaying discrepancies between when the model was correct and incorrect for both species.
 
 
 ![*Serenoa repens* | Credit: Botanics Wholesale (link: http://www.botanics.com/2018/09/26/serenoa-repens/)](../data/Serenoa-repens-e1537987510716.jpg){width=70%}
@@ -42,7 +47,7 @@ palmetto_data <- read_csv(here("data", "all_palmetto_data.csv")) %>%
 
 ### Preliminary Data Exploration
 
-#### Height vs. Length Scatterplot
+#### 1. Height vs. Length Scatterplot
 ```{r, echo=TRUE, message=FALSE, warning=FALSE}
 ggplot(data = palmetto_data, aes(x = height, y=length)) +
   geom_point(aes(color=species_name)) +
@@ -57,9 +62,85 @@ ggplot(data = palmetto_data, aes(x = height, y=length)) +
 
 Key Takeaway: Height and length for both plants have a strong linear positively correlation. Across the dataset, *Sabal etonia* appears to be longer and taller than *Serenoa repens*.
 
-####
-```{r}
 
+#### 2. Boxplots comparing counts of green leaves by species
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+ggplot(data = palmetto_data, aes(x = species_name, y=green_lvs, fill=species_name)) +
+  geom_boxplot() +
+  scale_fill_brewer(palette = "Blues") +
+  labs(
+    title = 'Green leaf count vs. species for Sabla etonia and Serenoa repens (1981-2017)',
+    x = 'Species',
+    y = 'Number of Green Leaves (count)'
+  )
+```
+
+**Figure 2:** These boxplots compare the difference in number of green leaves counted for *Sabal etonia* and *Serenoa repens*.
+
+Key Takeaway: *Serenoa repens* has a higher mean number of green leaves counted than *Sabal etonia*.
+
+
+#### 3. Boxplots comparing counts of green leaves by species
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+ggplot(data = palmetto_data, aes(x = species_name, y = width)) +
+  geom_jitter(aes(color=species_name)) +
+  labs(
+    title = 'Green leaf count vs. species for Sabla etonia and Serenoa repens (1981-2017)',
+    x = 'Species',
+    y = 'Width (cm)'
+  )
+```
+
+**Figure 3:** These jitterplots compare the difference in width (cm) for *Sabal etonia* and *Serenoa repens*.
+
+Key Takeaway: *Serenoa repens* and *Sabal etonia* generally have similar widths.
+
+### Binomial Logistic Regression Model
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+
+# convert species value to factor
+palmetto_factor <- palmetto_data %>% 
+  mutate(species = factor(palmetto_data$species_name)) 
+
+#levels(palmetto_factor$species) #check that species was converted to a factor
+
+#create blr model predicting species
+palmetto_blr <- glm(species ~ height + length + width + green_lvs, 
+                            data = palmetto_factor, 
+                            family = "binomial")
+
+# tidydata
+palmetto_tidy <- tidy(palmetto_blr)
+
+#create table with model outputs using Kable
+kbl(palmetto_tidy, caption = "Palmetto Binomial Regression Outputs") %>%
+  kable_styling(bootstrap_options = "striped",
+                full_width = F)
+```
+
+### Binomial Logistic Regression Model
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+#make predictions using blr model
+blr_fitted <- palmetto_blr %>%
+  broom::augment(type.predict = "response")
+
+#create table of correct vs. incorrect values
+blr_per_correct <- blr_fitted %>% 
+  mutate(predicted = case_when(.fitted >= 0.5 ~ 'Serenoa repens', 
+                              .fitted < 0.5  ~ 'Sabal etonia')) %>% 
+  mutate(accuracy = case_when(predicted == species ~ 'correct', 
+                              predicted != species  ~ 'incorrect')) %>% 
+  group_by(species, accuracy) %>% 
+  summarize(count = n()) %>% 
+  pivot_wider(names_from = accuracy,
+              values_from = count) %>% 
+  mutate(percent_correct = percent((correct/(correct + incorrect))))
+
+kbl(blr_per_correct, caption = "Palmetto Binomial Regression Outputs", 
+    col.names = c("Species", "Number Correct", "Number Incorrect", "Percent Correct")) %>%
+    kable_styling(bootstrap_options = "striped", full_width = F)
 ```
 
 ### Citation
