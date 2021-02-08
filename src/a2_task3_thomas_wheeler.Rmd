@@ -1,0 +1,43 @@
+---
+title: "Untitled"
+author: "Tom Wheeler"
+date: "2/7/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(stringr)
+library(maps)
+library(ggmap)
+library(gridExtra)
+```
+
+```{r}
+
+#read in plastics dataset
+plastics <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2021/2021-01-26/plastics.csv')
+countries <- read_csv(here('data', 'countries.csv')) %>% 
+  select(latitude:name) %>% 
+  mutate(country = name)
+
+merged_data <- merge(plastics, countries, by = "country") %>% 
+  group_by(country, longitude, latitude) %>% 
+  summarise(count = n())
+
+```
+
+```{r}
+map <- get_stamenmap(bbox = c(left = -140, bottom = -60, right = 160, top = 70), zoom = 3, maptype = "watercolor")
+ggmap(map) + theme(plot.title = element_text(hjust = 0.5)) +
+  geom_point(data = merged_data, aes(x = longitude, y = latitude, size = count)) +
+  labs(
+    title = 'Cumulative counts of companies hosting clean up events
+    around the world by country (2019-2020)',
+    y = 'latitude',
+    x = 'longitude'
+  )
+```
+
